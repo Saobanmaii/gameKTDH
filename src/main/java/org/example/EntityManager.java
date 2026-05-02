@@ -132,7 +132,20 @@ public class EntityManager {
             p.y = 0.55f + (float) Math.sin(time * 4f + p.bobPhase) * 0.18f;
             if (p.z > 8f) { it.remove(); continue; }
 
-            boolean collect = Math.abs(player.playerX - p.x) < 1.1f * scale
+            // Magnet: kéo coin về phía player từng frame (hiệu ứng nhìn thấy rõ)
+            if (player.magnetized && p.type == 0) {
+                float dx = player.playerX - p.x;
+                float dz = player.playerZ - p.z;
+                float dist = (float) Math.sqrt(dx * dx + dz * dz);
+                if (dist < 10f && dist > 0.02f) {
+                    float pull = 0.08f + 0.06f * (1f - dist / 10f);
+                    p.x += dx * pull;
+                    p.z += dz * 0.03f;
+                }
+            }
+
+            float collectR = player.magnetized ? 1.8f * scale : 1.1f * scale;
+            boolean collect = Math.abs(player.playerX - p.x) < collectR
                     && Math.abs(player.playerY - p.y) < 1.1f
                     && Math.abs(player.playerZ - p.z) < 1.0f;
             if (collect) {
@@ -159,13 +172,9 @@ public class EntityManager {
                 spawnPowerupParticles(p.x, p.y, p.z, new Vector3f(1f, 0.8f, 0.1f));
                 break;
             case 3:
+                player.magnetized = true;
+                player.magnetEnd  = frameCount + 420; // ~7s @ 60fps
                 spawnPowerupParticles(p.x, p.y, p.z, new Vector3f(1f, 0.3f, 0.9f));
-                pickups.removeIf(c -> {
-                    if (c.type == 0 && Math.abs(c.z - player.playerZ) < 12f) {
-                        onScoreAdd.accept(10); return true;
-                    }
-                    return false;
-                });
                 break;
         }
     }

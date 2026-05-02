@@ -8,7 +8,7 @@ public class Obstacle {
         this.x = x;
         // shape 2: wide blocker nâng cao, player slide qua dưới
         // shape 4: low arch — đáy ở y=0.6, center=0.9, player phải slide (không nhảy thấp qua được)
-        this.y = (shape == 2) ? 0.51f : (shape == 4) ? 0.6f : 0f;
+        this.y = (shape == 2) ? 0.65f : (shape == 4) ? 0.6f : 0f;
         this.z = z;
         this.shape = shape;
     }
@@ -24,6 +24,7 @@ public class Obstacle {
     public float h() {
         switch (shape) {
             case 1: return 0.5f;
+            case 2: return 0.5f;  // thin beam overhead
             case 3: return 0.45f;
             case 4: return 0.6f;
             default: return 1.1f;

@@ -339,18 +339,31 @@ public class Renderer {
                     }
                     break;
                 }
-                case 2: { // wide blocker — áp dụng PHÉP BIẾN DẠNG shearXZ
+                case 2: { // wide blocker — dầm ngang cao, player phải slide qua dưới
+                    float beamCY = o.y + o.h() * 0.5f;  // ~0.90: tâm dầm ở ngang đầu người
+                    // Dầm ngang chính + PHÉP BIẾN DẠNG shearXZ
                     setColor(0.75f, 0.08f, 0.8f, 1f, pulse);
-                    Matrix4f t = Transform3D.translation(o.x, 0.5f, o.z);
-                    Matrix4f s = Transform3D.scale(o.w(), 0.38f, o.d());
-                    setModel(Transform3D.compose(t, new Matrix4f(), s, shearWide));
+                    setModel(Transform3D.compose(
+                            Transform3D.translation(o.x, beamCY, o.z),
+                            new Matrix4f(),
+                            Transform3D.scale(o.w(), o.h(), o.d()),
+                            shearWide));
                     drawBox36();
+                    // Glow outline
                     setColor(1f, 0.3f, 1f, 0.5f, 1f);
                     setModel(Transform3D.compose(
-                            Transform3D.translation(o.x, 0.5f, o.z),
+                            Transform3D.translation(o.x, beamCY, o.z),
                             new Matrix4f(),
-                            Transform3D.scale(o.w() + 0.12f, 0.5f, o.d() + 0.12f),
+                            Transform3D.scale(o.w() + 0.14f, o.h() + 0.18f, o.d() + 0.14f),
                             shearWide));
+                    drawBox36();
+                    // Trụ đỡ từ mặt đất lên đáy dầm
+                    float pillarH  = o.y;
+                    float pillarCY = pillarH * 0.5f;
+                    setColor(0.55f, 0.05f, 0.62f, 1f, 0.3f);
+                    setModel(Transform3D.ts(o.x - o.w() * 0.47f, pillarCY, o.z, 0.15f, pillarH, o.d()));
+                    drawBox36();
+                    setModel(Transform3D.ts(o.x + o.w() * 0.47f, pillarCY, o.z, 0.15f, pillarH, o.d()));
                     drawBox36();
                     break;
                 }
@@ -504,6 +517,25 @@ public class Renderer {
             Matrix4f t = Transform3D.translation(player.playerX, player.playerY + 0.55f * scale, player.playerZ);
             Matrix4f s = Transform3D.uniformScale(scale * PLAYER_SHIELD_SCALE);
             setModel(new Matrix4f(t).mul(s));
+            drawBox36();
+        }
+
+        // Magnet aura — vòng magenta quay thu hút coin
+        if (player.magnetized) {
+            float glow = 0.5f + (float) Math.sin(time * 14f) * 0.42f;
+            setColor(1f, 0.15f, 0.95f, glow * 0.38f, 1f);
+            model.identity()
+                 .translate(player.playerX, player.playerY + 0.55f * scale, player.playerZ)
+                 .rotate(time * 2.8f, 0, 1, 0)
+                 .scale(scale * 2.5f, 0.1f, scale * 2.5f);
+            setModel(model);
+            drawBox36();
+            setColor(0.85f, 0.05f, 1f, glow * 0.28f, 1f);
+            model.identity()
+                 .translate(player.playerX, player.playerY + 0.55f * scale, player.playerZ)
+                 .rotate(time * -1.9f + 1.2f, 1, 0, 0)
+                 .scale(scale * 2.1f, scale * 2.1f, 0.1f);
+            setModel(model);
             drawBox36();
         }
 

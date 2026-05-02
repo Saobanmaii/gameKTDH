@@ -22,10 +22,12 @@ public class Player {
     public float   slideTimer  = 0f;
 
     // ── Power-ups ─────────────────────────────────────────────────────────────
-    public boolean shrunk    = false;
-    public long    shrinkEnd = 0;
-    public boolean shielded  = false;
-    public long    shieldEnd = 0;
+    public boolean shrunk     = false;
+    public long    shrinkEnd  = 0;
+    public boolean shielded   = false;
+    public long    shieldEnd  = 0;
+    public boolean magnetized = false;
+    public long    magnetEnd  = 0;
 
     // ── Input queue ───────────────────────────────────────────────────────────
     public int pendingLane = 0;
@@ -42,7 +44,7 @@ public class Player {
         playerX = 0; playerY = 0; playerZ = 0;
         velY = 0; targetLane = 0;
         jumping = false; sliding = false; slideTimer = 0;
-        shrunk = false; shielded = false;
+        shrunk = false; shielded = false; magnetized = false;
         pendingLane = 0;
         deathShear = 0; deathAngle = 0; jumpAngle = 0; groundY = 0;
     }
@@ -50,8 +52,9 @@ public class Player {
     public float getScale() { return shrunk ? 0.5f : 1.0f; }
 
     public float update(float dt, float gameSpeed, long frameCount, Runnable onLand) {
-        if (shrunk   && frameCount > shrinkEnd) shrunk   = false;
-        if (shielded && frameCount > shieldEnd) shielded = false;
+        if (shrunk     && frameCount > shrinkEnd)  shrunk     = false;
+        if (shielded   && frameCount > shieldEnd)  shielded   = false;
+        if (magnetized && frameCount > magnetEnd)  magnetized = false;
 
         // Rơi tự do khi platform biến mất dưới chân
         if (!jumping && playerY > groundY + 0.01f) {

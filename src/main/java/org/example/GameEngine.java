@@ -231,10 +231,11 @@ public class GameEngine {
         }
         if (state == State.PLAYING && score != lastHudScore && score % 50 == 0) {
             lastHudScore = score;
-            System.out.printf("[SCORE] %d  |  Speed: %.2f  |  %s%s%n",
+            System.out.printf("[SCORE] %d  |  Speed: %.2f  |  %s%s%s%n",
                     score, gameSpeed,
-                    player.shielded ? "[SHIELD] " : "",
-                    player.shrunk   ? "[SHRINK] " : "");
+                    player.shielded   ? "[SHIELD] " : "",
+                    player.shrunk     ? "[SHRINK] " : "",
+                    player.magnetized ? "[MAGNET] " : "");
         }
         if (state == State.DEAD && !gameOverShown) {
             gameOverShown = true;
