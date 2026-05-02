@@ -32,10 +32,32 @@ public class Renderer {
     private final Matrix4f model = new Matrix4f();
 
     // ── Constants ─────────────────────────────────────────────────────────────
-    private static final float LANE_GAP   = 2.2f;
+    private static final float LANE_GAP    = 2.2f;
     private static final float TILE_LENGTH = 20f;
     private static final float BASE_SPEED  = 0.18f;
-    private static final float MAX_SPEED   = 0.55f;
+    private static final float MAX_SPEED   = 0.70f;
+
+    // Camera
+    private static final float FOV_BASE           = 58f;
+    private static final float FOV_RANGE          = 20f;
+    private static final float NEAR_PLANE         = 0.05f;
+    private static final float FAR_PLANE          = 200f;
+    private static final float CAM_FOLLOW_X       = 0.08f;
+    private static final float CAM_Y              = 3.2f;
+    private static final float CAM_Z              = 5.5f;
+    private static final float CAM_TARGET_X_SCALE = 0.04f;
+    private static final float CAM_TARGET_Y       = 0.3f;
+    private static final float CAM_TARGET_Z       = -8f;
+    private static final float SHAKE_SCALE_X      = 0.4f;
+    private static final float SHAKE_SCALE_Y      = 0.25f;
+
+    // Player rendering
+    private static final float DEATH_FADE_THRESHOLD = 0.18f;
+    private static final float PLAYER_SHIELD_SCALE  = 1.75f;
+
+    // 3D Shear algorithm constants (Transform3D)
+    private static final float WIDE_SHEAR          = 0.06f;  // shearXZ cho wide obstacle
+    private static final float BUILDING_SHEAR_MAX  = 0.09f;  // shearZY max cho tòa nhà
 
     // =========================================================================
     //  INIT
@@ -202,16 +224,16 @@ public class Renderer {
         glUseProgram(shaderProgram);
 
         // ── Camera ────────────────────────────────────────────────────────────
-        float shakeX = cameraShake * (rng.nextFloat() - 0.5f) * 0.4f;
-        float shakeY = cameraShake * (rng.nextFloat() - 0.5f) * 0.25f;
-        float fov    = 58f + (gameSpeed - BASE_SPEED) / (MAX_SPEED - BASE_SPEED) * 20f;
-        proj.identity().perspective((float) Math.toRadians(fov), (float) WIN_W / WIN_H, 0.05f, 200f);
+        float shakeX = cameraShake * (rng.nextFloat() - 0.5f) * SHAKE_SCALE_X;
+        float shakeY = cameraShake * (rng.nextFloat() - 0.5f) * SHAKE_SCALE_Y;
+        float fov    = FOV_BASE + (gameSpeed - BASE_SPEED) / (MAX_SPEED - BASE_SPEED) * FOV_RANGE;
+        proj.identity().perspective((float) Math.toRadians(fov), (float) WIN_W / WIN_H, NEAR_PLANE, FAR_PLANE);
 
-        float camX = player.playerX * 0.08f + shakeX;
-        float camY = 3.2f + shakeY;
-        float camZ = 5.5f;
+        float camX = player.playerX * CAM_FOLLOW_X + shakeX;
+        float camY = CAM_Y + shakeY;
+        float camZ = CAM_Z;
         view.identity().lookAt(camX, camY, camZ,
-                player.playerX * 0.04f, 0.3f, -8f, 0, 1, 0);
+                player.playerX * CAM_TARGET_X_SCALE, CAM_TARGET_Y, CAM_TARGET_Z, 0, 1, 0);
 
         glUniformMatrix4fv(uniProj, false, proj.get(matBuf));
         glUniformMatrix4fv(uniView, false, view.get(matBuf));
@@ -276,9 +298,9 @@ public class Renderer {
         float pulse = 0.45f + (float) Math.sin(time * 7f) * 0.25f;
 
         // Biến dạng shear cho obstacle wide blocker (shape 2)
-        Matrix4f shearWide = Transform3D.shearXZ(0.06f);
+        Matrix4f shearWide = Transform3D.shearXZ(WIDE_SHEAR);
 
-        for (EntityManager.Obstacle o : em.obstacles) {
+        for (Obstacle o : em.obstacles) {
             switch (o.shape) {
                 case 0: { // tall wall — hai trụ bên + tấm giữa
                     setColor(0.95f, 0.12f, 0.08f, 1f, pulse);
@@ -321,10 +343,8 @@ public class Renderer {
                     setColor(0.75f, 0.08f, 0.8f, 1f, pulse);
                     Matrix4f t = Transform3D.translation(o.x, 0.5f, o.z);
                     Matrix4f s = Transform3D.scale(o.w(), 0.38f, o.d());
-                    // Kết hợp: T * S * Sh (biến dạng 3D)
                     setModel(Transform3D.compose(t, new Matrix4f(), s, shearWide));
                     drawBox36();
-                    // Glow frame xung quanh
                     setColor(1f, 0.3f, 1f, 0.5f, 1f);
                     setModel(Transform3D.compose(
                             Transform3D.translation(o.x, 0.5f, o.z),
@@ -332,6 +352,45 @@ public class Renderer {
                             Transform3D.scale(o.w() + 0.12f, 0.5f, o.d() + 0.12f),
                             shearWide));
                     drawBox36();
+                    break;
+                }
+                case 3: { // platform — tấm nhảy xanh lá, đứng trên mặt đất
+                    setColor(0.05f, 0.80f, 0.45f, 1f, 0.15f);
+                    setModel(Transform3D.ts(o.x, o.h() * 0.5f, o.z, o.w(), o.h(), o.d()));
+                    drawBox36();
+                    // Glow viền
+                    setColor(0.2f, 1f, 0.6f, 0.5f, 1f);
+                    setModel(Transform3D.ts(o.x, o.h() * 0.5f, o.z, o.w() + 0.10f, o.h() + 0.06f, o.d() + 0.10f));
+                    drawBox36();
+                    // Stripe trên mặt
+                    setColor(0.8f, 1f, 0.3f, 0.9f, 1f);
+                    setModel(Transform3D.ts(o.x, o.h() + 0.01f, o.z, o.w() * 0.7f, 0.04f, o.d() * 0.7f));
+                    drawBox36();
+                    break;
+                }
+                case 4: { // low arch — thanh ngang đỏ cam, player PHẢI slide
+                    // Thanh ngang chính (ở độ cao đầu người)
+                    setColor(0.95f, 0.25f, 0.0f, 1f, pulse);
+                    setModel(Transform3D.ts(o.x, o.y + o.h() * 0.5f, o.z, o.w(), o.h(), o.d()));
+                    drawBox36();
+                    // Glow đỏ cam
+                    setColor(1f, 0.5f, 0.05f, 0.4f, 1f);
+                    setModel(Transform3D.ts(o.x, o.y + o.h() * 0.5f, o.z, o.w() + 0.14f, o.h() + 0.12f, o.d() + 0.10f));
+                    drawBox36();
+                    // Cột trụ trái
+                    setColor(0.7f, 0.15f, 0.0f, 1f, 0.25f);
+                    setModel(Transform3D.ts(o.x - o.w() * 0.46f, o.y * 0.5f, o.z, 0.14f, o.y, o.d()));
+                    drawBox36();
+                    // Cột trụ phải
+                    setModel(Transform3D.ts(o.x + o.w() * 0.46f, o.y * 0.5f, o.z, 0.14f, o.y, o.d()));
+                    drawBox36();
+                    // Warning stripe vàng trên thanh
+                    setColor(1f, 0.92f, 0.0f, 1f, 1f);
+                    for (int s = 0; s < 5; s++) {
+                        float sx = o.x - o.w() * 0.4f + s * (o.w() * 0.8f / 4f);
+                        setModel(Transform3D.ts(sx, o.y + o.h() * 0.5f, o.z - 0.01f, 0.2f, o.h() * 0.85f, o.d() + 0.04f));
+                        drawBox36();
+                    }
                     break;
                 }
             }
@@ -343,7 +402,7 @@ public class Renderer {
     // ─────────────────────────────────────────────────────────────────────────
     private void drawPickups(EntityManager em, float time) {
         glBindVertexArray(vaoBox);
-        for (EntityManager.Pickup p : em.pickups) {
+        for (Pickup p : em.pickups) {
             float spin = time * 3.5f + p.bobPhase;
             switch (p.type) {
                 case 0: { // coin — flat disc quay nhanh
@@ -423,7 +482,7 @@ public class Renderer {
     // ─────────────────────────────────────────────────────────────────────────
     private void drawPlayer(Player player, float time, float gameSpeed,
                              boolean isDead, float deathTimer) {
-        if (isDead && deathTimer > 0.18f) return;
+        if (isDead && deathTimer > DEATH_FADE_THRESHOLD) return;
 
         float scale   = player.getScale();
         float lean    = (player.playerX - player.targetLane * Player.LANE_GAP) * -0.18f;
@@ -443,8 +502,18 @@ public class Renderer {
             float glow = 0.5f + (float) Math.sin(time * 9f) * 0.32f;
             setColor(1f, 0.9f, 0.15f, glow * 0.3f, 1f);
             Matrix4f t = Transform3D.translation(player.playerX, player.playerY + 0.55f * scale, player.playerZ);
-            Matrix4f s = Transform3D.uniformScale(scale * 1.75f);
+            Matrix4f s = Transform3D.uniformScale(scale * PLAYER_SHIELD_SCALE);
             setModel(new Matrix4f(t).mul(s));
+            drawBox36();
+        }
+
+        // Shrunk aura — nhấp nháy cyan nhanh, rõ hơn shield
+        if (player.shrunk) {
+            float glow = 0.55f + (float) Math.sin(time * 14f) * 0.35f;
+            setColor(0.0f, 0.95f, 1f, glow * 0.45f, 1f);
+            Matrix4f t = Transform3D.translation(player.playerX, player.playerY + 0.55f * scale, player.playerZ);
+            // Aura nhỏ hơn shield vì player đang bé
+            setModel(new Matrix4f(t).mul(Transform3D.uniformScale(scale * 2.2f)));
             drawBox36();
         }
 
@@ -496,7 +565,7 @@ public class Renderer {
         // Arms (tay — swing ngược chiều leg)
         setColor(br, bg * 0.85f, bb, 1f, 0.04f);
         float armSwing = player.jumping ? -0.3f
-                : (float) Math.sin(time * 12f * gameSpeed / BASE_SPEED + Math.PI) * 0.3f;
+                : (float) Math.sin(time * 4f + Math.PI) * 0.3f;
         for (int lr = -1; lr <= 1; lr += 2) {
             float armY = player.playerY + (bodyH * 0.7f) * scale + (player.sliding ? -0.25f * scale : 0);
             Matrix4f t = Transform3D.translation(player.playerX + lr * 0.48f * scale, armY, player.playerZ);
@@ -512,7 +581,7 @@ public class Renderer {
     // ─────────────────────────────────────────────────────────────────────────
     private void drawTrails(EntityManager em) {
         glBindVertexArray(vaoBox);
-        for (EntityManager.TrailSegment t : em.trails) {
+        for (TrailSegment t : em.trails) {
             float lifeRatio = t.alpha / 0.55f;
             // Gradient: cyan → green → transparent
             setColor(0.1f + lifeRatio * 0.1f, 0.9f, 0.5f + lifeRatio * 0.3f, t.alpha, 0.65f);
@@ -526,10 +595,19 @@ public class Renderer {
     // ─────────────────────────────────────────────────────────────────────────
     private void drawParticles(EntityManager em) {
         glBindVertexArray(vaoBox);
-        for (EntityManager.Particle p : em.particles) {
+        for (Particle p : em.particles) {
             float a = p.life / p.maxLife;
-            setColor(p.color.x, p.color.y * a + 0.2f * (1 - a), p.color.z * a, a * 0.9f, 0.75f);
-            model.identity().translate(p.x, p.y, p.z).scale(p.size, p.size, p.size);
+            if (p.scaleX > 0) {
+                // Shard fragment: lit with slight emissive, tumbling rotation
+                setColor(p.color.x, p.color.y, p.color.z, a, 0.10f);
+                model.identity()
+                     .translate(p.x, p.y, p.z)
+                     .rotate(p.angle, 0.4f, 1f, 0.3f)
+                     .scale(p.scaleX, p.scaleY, p.scaleZ);
+            } else {
+                setColor(p.color.x, p.color.y * a + 0.2f * (1 - a), p.color.z * a, a * 0.9f, 0.75f);
+                model.identity().translate(p.x, p.y, p.z).scale(p.size, p.size, p.size);
+            }
             glUniformMatrix4fv(uniModel, false, model.get(matBuf));
             drawBox36();
         }
@@ -542,7 +620,7 @@ public class Renderer {
         glBindVertexArray(vaoBox);
         float speedFactor = (gameSpeed - BASE_SPEED) / (MAX_SPEED - BASE_SPEED);
         // Biến dạng tòa nhà nghiêng về phía trước theo tốc độ
-        Matrix4f buildingShear = Transform3D.shearZY(speedFactor * 0.09f);
+        Matrix4f buildingShear = Transform3D.shearZY(speedFactor * BUILDING_SHEAR_MAX);
 
         int N = 6;
         float spacing = 20f;

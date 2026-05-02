@@ -21,8 +21,8 @@ public class GameEngine {
 
     // ── Game constants ────────────────────────────────────────────────────────
     private static final float BASE_SPEED  = 0.18f;
-    private static final float MAX_SPEED   = 0.55f;
-    private static final float ACCEL       = 0.000035f;
+    private static final float MAX_SPEED   = 0.70f;
+    private static final float ACCEL       = 0.00008f;
     private static final int   TILE_COUNT  = 8;
     private static final float TILE_LENGTH = 20f;
 
@@ -47,9 +47,6 @@ public class GameEngine {
     private boolean readyShown    = false;
     private boolean gameOverShown = false;
     private int     lastHudScore  = -1;
-
-    // ── Score array (allows mutation from lambda) ─────────────────────────────
-    private final int[] scoreRef = {0};
 
     // =========================================================================
     //  ENTRY POINT
@@ -125,7 +122,7 @@ public class GameEngine {
     // =========================================================================
     private void startGame() {
         state      = State.PLAYING;
-        score      = 0; scoreRef[0] = 0;
+        score      = 0;
         gameSpeed  = BASE_SPEED;
         frameCount = 0;
         deathTimer = 0; cameraShake = 0;
@@ -133,7 +130,7 @@ public class GameEngine {
         player.reset();
         em.clear();
         initRoad();
-        for (int i = 1; i <= 10; i++) em.spawnWave(-i * 18f);
+        for (int i = 1; i <= 14; i++) em.spawnWave(-i * 12f);
         System.out.println("=== GAME START ===");
         System.out.println("A/D = lane  |  SPACE/W = jump  |  S = slide  |  ESC = quit");
     }
@@ -163,23 +160,23 @@ public class GameEngine {
     //  UPDATE
     // =========================================================================
     private void update(float dt, float time) {
-        if (state != State.PLAYING) {
-            if (state == State.DEAD) {
-                deathTimer  += dt;
-                cameraShake  = Math.max(0, cameraShake - dt * 3f);
-                // Biến dạng tan chảy tăng dần (phép biến dạng shearYX)
-                player.deathShear = Math.min(deathTimer * 0.8f, 1.5f);
-            }
+        if (state == State.DEAD) {
+            deathTimer  += dt;
+            cameraShake  = Math.max(0, cameraShake - dt * 3f);
+            player.deathShear = Math.min(deathTimer * 0.8f, 1.5f);
+            em.updateParticles(dt);
+            em.updateTrails(dt);
             return;
         }
+        if (state != State.PLAYING) return;
 
         frameCount++;
-        if (frameCount % 6 == 0) { score++; scoreRef[0] = score; }
+        if (frameCount % 6 == 0) score++;
 
         gameSpeed = Math.min(MAX_SPEED, BASE_SPEED + frameCount * ACCEL);
 
         // Player movement (returns lateral delta for trail)
-        float lateralDelta = player.update(dt, gameSpeed,
+        float lateralDelta = player.update(dt, gameSpeed, frameCount,
                 () -> em.spawnLandParticles(player.playerX, player.playerY, player.playerZ));
 
         // Trail
@@ -196,7 +193,10 @@ public class GameEngine {
             tileZ[i] += gameSpeed;
             if (tileZ[i] > 10f) {
                 tileZ[i] -= TILE_COUNT * TILE_LENGTH;
-                em.spawnWave(tileZ[i] - TILE_LENGTH * 0.5f);
+                int numWaves = 2 + rng.nextInt(2); // 2 hoặc 3 waves mỗi tile
+                for (int w = 0; w < numWaves; w++) {
+                    em.spawnWave(tileZ[i] - TILE_LENGTH * (0.15f + w * (0.70f / numWaves)));
+                }
             }
         }
 
@@ -204,8 +204,7 @@ public class GameEngine {
         em.updateObstacles(gameSpeed, player, frameCount,
                 () -> em.spawnShieldBreak(player.playerX, player.playerY, player.playerZ),
                 () -> triggerDeath());
-        em.updatePickups(gameSpeed, time, player, scoreRef);
-        score = scoreRef[0];
+        em.updatePickups(gameSpeed, time, player, delta -> score += delta, frameCount);
         em.updateParticles(dt);
     }
 
@@ -215,6 +214,7 @@ public class GameEngine {
         cameraShake = 1.0f;
         if (score > hiScore) hiScore = score;
         em.spawnDeathExplosion(player.playerX, player.playerY, player.playerZ, rng);
+        em.spawnShatterFragments(player.playerX, player.playerY, player.playerZ, player.getScale());
         System.out.println("=== GAME OVER ===  Score: " + score + "  Hi: " + hiScore);
     }
 
